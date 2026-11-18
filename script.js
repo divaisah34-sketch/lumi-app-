@@ -405,13 +405,14 @@ remove.addEventListener("click", async event => {
     }
   }
 
+  
   function renderMessages() {
     const container = $("messages");
     container.replaceChildren();
 
     $("welcome").hidden = messages.length > 0;
 
-    messages.forEach(message => {
+    messages.forEach((message, index) => {
       const item = document.createElement("div");
       item.className = "message " +
         (message.role === "user" ? "user" : "ai");
@@ -425,16 +426,180 @@ remove.addEventListener("click", async event => {
       const bubble = document.createElement("div");
       bubble.className = "message-bubble";
 
-      // textContent evita execução de HTML enviado pelo usuário ou pela IA.
       const formattedMessage = marked.parse(message.content);
-bubble.innerHTML = DOMPurify.sanitize(formattedMessage);
+      bubble.innerHTML = DOMPurify.sanitize(formattedMessage);
 
-      item.append(label, bubble);
+      const actions = document.createElement("div");
+      actions.className = "message-actions";
+      actions.style.display = "flex";
+      actions.style.alignItems = "center";
+      actions.style.gap = "5px";
+      actions.style.marginTop = "5px";
+
+      function addAction(symbol, description, callback) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = symbol;
+        button.title = description;
+        button.setAttribute("aria-label", description);
+        button.style.background = "transparent";
+        button.style.border = "none";
+        button.style.color = "inherit";
+        button.style.opacity = "0.75";
+        button.style.cursor = "pointer";
+        button.style.fontSize = "14px";
+        button.style.padding = "3px 6px";
+
+        button.addEventListener("click", callback);
+        actions.appendChild(button);
+      }
+
+      if (message.role === "user") {
+        addAction("⧉", "Copiar mensagem", () => {
+          copyMessage(message.content);
+        });
+
+        addAction("✎", "Editar mensagem", () => {
+          editMessage(index);
+        });
+      } else {
+        addAction("⧉", "Copiar resposta", () => {
+          copyMessage(message.content);
+        });
+
+        addAction("↻", "Gerar outra resposta", () => {
+          regenerateResponse(index);
+        });
+
+        if (message.versions && message.versions.length > 1) {
+          addAction("←", "Voltar à resposta anterior", () => {
+            showPreviousResponse(index);
+          });
+        }
+      }
+
+      item.append(label, bubble, actions);
       container.appendChild(item);
     });
 
     $("chatArea").scrollTop = $("chatArea").scrollHeight;
   }
+
+  async function copyMessage(content) {
+    try {
+      await navigator.clipboard.writeText(content);
+      showToast("Mensagem copiada! ✦");
+    } catch (error) {
+      console.error("Erro ao copiar:", error);
+      showToast("Não foi possível copiar a mensagem.");
+    }
+  }
+
+  function showPreviousResponse(index) {
+    const message = messages[index];
+
+    if (!message || !message.versions ||
+        message.versions.length < 2) return;
+
+    const currentIndex = message.versionIndex ??
+      message.versions.length - 1;
+
+    if (currentIndex <= 0) return;
+
+    message.versionIndex = currentIndex - 1;
+    message.content = message.versions[message.versionIndex];
+
+    saveCurrentChat();
+    renderMessages();
+  }
+
+  async function regenerateResponse(index) {
+    if (busy) return;
+
+    const message = messages[index];
+
+    if (!message || message.role !== "assistant") return;
+
+    busy = true;
+    $("sendBtn").disabled = true;
+    $("typing").hidden = false;
+
+    try {
+      const answer = await callAI(messages.slice(0, index));
+
+      if (!message.versions) {
+        message.versions = [message.content];
+      }
+
+      message.versions.push(answer);
+      message.versionIndex = message.versions.length - 1;
+      message.content = answer;
+
+      saveCurrentChat();
+      renderMessages();
+
+    } catch (error) {
+      console.error("Erro ao gerar outra resposta:", error);
+      showToast("Não consegui gerar outra resposta.");
+    } finally {
+      $("typing").hidden = true;
+      $("sendBtn").disabled = false;
+      busy = false;
+    }
+  }
+
+  async function editMessage(index) {
+    const message = messages[index];
+
+    if (!message || message.role !== "user" || busy) return;
+
+    const editedText = message.content;
+    const chatId = currentChatId;
+
+    messages = messages.slice(0, index);
+
+    if (messages.length > 0) {
+      saveCurrentChat();
+    } else {
+      conversations = conversations.filter(
+        chat => chat.id !== chatId
+      );
+
+      saveConversations();
+
+      if (currentUser && currentUser.id && chatId) {
+        try {
+          await supabaseClient
+            .from("messages")
+            .delete()
+            .eq("conversation_id", chatId)
+            .eq("user_id", currentUser.id);
+
+          await supabaseClient
+            .from("conversations")
+            .delete()
+            .eq("id", chatId)
+            .eq("user_id", currentUser.id);
+        } catch (error) {
+          console.error("Erro ao atualizar conversa:", error);
+        }
+      }
+
+      currentChatId = null;
+    }
+
+    renderMessages();
+
+    const input = $("messageInput");
+    input.value = editedText;
+    input.style.height = "auto";
+    input.style.height =
+      Math.min(input.scrollHeight, 140) + "px";
+    input.focus();
+
+    showToast("Mensagem pronta para editar.");
+  }
+
 
   function getSystemPrompt() {
     const personality = settings.personality === "Personalizada"
@@ -478,7 +643,7 @@ function getPersonalityKey() {
   return "amigavel";
 }
 
-  async function callAI() {
+  async function callAI(messagesToSend = messages) {
   // Busca a sessão atual do Supabase
   const { data, error } = await supabaseClient.auth.getSession();
 
@@ -501,7 +666,7 @@ function getPersonalityKey() {
       "Authorization": `Bearer ${session.access_token}`
     },
     body: JSON.stringify({
-  messages: messages.slice(-15),
+  messages: messagesToSend.slice(-15),
   personality: getPersonalityKey(),
   systemPrompt: getSystemPrompt(),
   settings: {
@@ -555,9 +720,11 @@ function getPersonalityKey() {
       const answer = await callAI();
 
       messages.push({
-        role: "assistant",
-        content: answer
-      });
+  role: "assistant",
+  content: answer,
+  versions: [answer],
+  versionIndex: 0
+});
 
       saveCurrentChat();
       renderMessages();
