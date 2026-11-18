@@ -379,3 +379,28 @@ body.light .composer-area {background:var(--bg)}
   .auth-card {padding:22px}
   }
   
+.message-actions {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  min-height: 28px;
+}
+
+.message-actions button {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 7px;
+  color: var(--muted) !important;
+  transition: .2s;
+}
+
+.message-actions button:hover {
+  background: var(--surface2) !important;
+  color: var(--accent) !important;
+  opacity: 1 !important;
+  }
+
