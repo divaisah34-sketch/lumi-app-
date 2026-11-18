@@ -549,56 +549,26 @@ remove.addEventListener("click", async event => {
   }
 
   async function editMessage(index) {
-    const message = messages[index];
+  const message = messages[index];
 
-    if (!message || message.role !== "user" || busy) return;
+  if (!message || message.role !== "user" || busy) return;
 
-    const editedText = message.content;
-    const chatId = currentChatId;
+  const editedText = message.content;
 
-    messages = messages.slice(0, index);
+  messages = messages.slice(0, index);
 
-    if (messages.length > 0) {
-      saveCurrentChat();
-    } else {
-      conversations = conversations.filter(
-        chat => chat.id !== chatId
-      );
+  saveCurrentChat();
+  renderMessages();
 
-      saveConversations();
+  const input = $("messageInput");
+  input.value = editedText;
+  input.style.height = "auto";
+  input.style.height =
+    Math.min(input.scrollHeight, 140) + "px";
+  input.focus();
 
-      if (currentUser && currentUser.id && chatId) {
-        try {
-          await supabaseClient
-            .from("messages")
-            .delete()
-            .eq("conversation_id", chatId)
-            .eq("user_id", currentUser.id);
-
-          await supabaseClient
-            .from("conversations")
-            .delete()
-            .eq("id", chatId)
-            .eq("user_id", currentUser.id);
-        } catch (error) {
-          console.error("Erro ao atualizar conversa:", error);
-        }
-      }
-
-      currentChatId = null;
-    }
-
-    renderMessages();
-
-    const input = $("messageInput");
-    input.value = editedText;
-    input.style.height = "auto";
-    input.style.height =
-      Math.min(input.scrollHeight, 140) + "px";
-    input.focus();
-
-    showToast("Mensagem pronta para editar.");
-  }
+  showToast("Mensagem pronta para editar.");
+}
 
 
   function getSystemPrompt() {
