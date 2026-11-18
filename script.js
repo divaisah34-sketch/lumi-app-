@@ -32,6 +32,7 @@ const supabaseClient = window.supabase.createClient(
   let conversations = [];
   let currentChatId = null;
   let messages = [];
+  let editingChatId = null;
   let currentUser = read(KEYS.session, null);
   let authMode = "login";
   let busy = false;
@@ -554,8 +555,10 @@ remove.addEventListener("click", async event => {
   if (!message || message.role !== "user" || busy) return;
 
   const editedText = message.content;
+    editingChatId = currentChatId;
 
   messages = messages.slice(0, index);
+    
 
   saveCurrentChat();
   renderMessages();
@@ -671,10 +674,13 @@ function getPersonalityKey() {
 
     if (!text || busy) return;
 
-    if (!currentChatId) {
-      currentChatId = crypto.randomUUID
-        ? crypto.randomUUID()
-        : String(Date.now());
+    if (editingChatId) {
+  currentChatId = editingChatId;
+  editingChatId = null;
+} else if (!currentChatId) {
+  currentChatId = crypto.randomUUID
+    ? crypto.randomUUID()
+    : String(Date.now());
     }
 
     busy = true;
