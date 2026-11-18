@@ -774,13 +774,6 @@ $("changePasswordBtn").addEventListener("click", async () => {
     sendMessage(text);
   });
 
-  $("messageInput").addEventListener("keydown", event => {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      $("chatForm").requestSubmit();
-    }
-  });
-
   $("messageInput").addEventListener("input", event => {
     event.target.style.height = "auto";
     event.target.style.height =
